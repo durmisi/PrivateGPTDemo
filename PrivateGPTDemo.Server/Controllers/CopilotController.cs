@@ -1,19 +1,29 @@
 ﻿using Azure.AI.OpenAI;
-using Azure.Identity;
 using Microsoft.AspNetCore.Mvc;
+using PrivateGPTDemo.Server.Services;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 
 namespace PrivateGPTDemo.Server.Controllers
 {
     [ApiController]
+    [Route("api/copilot/v1")]
     public class CopilotController : ControllerBase
     {
+        private readonly IOpenAIClientFactory _openAIClientFactory;
+
+        public CopilotController(IOpenAIClientFactory openAIClientFactory)
+        {
+            _openAIClientFactory = openAIClientFactory;
+        }
+
 
         [HttpPost]
+        [Route("send")]
         public async Task<ActionResult> SendMessage(string message, CancellationToken ct = default)
         {
 
-            var client = new OpenAIClient(new Uri(""), new DefaultAzureCredential());
+            var client = _openAIClientFactory.GetClient();
 
 
             var serializationOptions = new JsonSerializerOptions()
@@ -22,7 +32,7 @@ namespace PrivateGPTDemo.Server.Controllers
             };
 
             var funcs = new List<FunctionDefinition>() {
-                new FunctionDefinition()
+                new()
                 {
 
                     Name = "get_time_in_city",
@@ -45,16 +55,17 @@ namespace PrivateGPTDemo.Server.Controllers
             };
 
 
+            var deploymentName = "gpt-35-turbo";
 
-            var completions = client.GetChatCompletions(
-                new ChatCompletionsOptions("gpt-35-turbo", new List<ChatRequestMessage>()
+
+            var completions = await client.GetChatCompletionsAsync(
+                new ChatCompletionsOptions(deploymentName, new List<ChatRequestMessage>()
                 {
-                    new ChatRequestFunctionMessage("test", await GetCurrentTime("Europe/Berlin")),
                     new ChatRequestUserMessage("What time is it in Amsterdam?")
                 })
                 {
                     Functions = funcs
-                });
+                }, ct);
 
 
             foreach (var choice in completions.Value.Choices)
@@ -65,16 +76,17 @@ namespace PrivateGPTDemo.Server.Controllers
                     var payload = JsonSerializer.Deserialize<Dictionary<string, string>>(choice.Message.FunctionCall.Arguments);
 
                     var city = payload["city"];
-                    var timeZone = await GetCurrentTime(city);
+                    var timeZone = await GetCurrentTime(city, ct);
 
 
-                    var completions1 = client.GetChatCompletions(new ChatCompletionsOptions("", new List<ChatRequestMessage>()
+                    var completions1 = await client.GetChatCompletionsAsync(new ChatCompletionsOptions(deploymentName,
+                        new List<ChatRequestMessage>()
                     {
 
                         new ChatRequestUserMessage("What time is it in Amsterdam?"),
                         new ChatRequestFunctionMessage("get_time_in_city", timeZone)
 
-                    }));
+                    }), ct);
 
 
                     var comp = completions1.Value.Choices.First();
@@ -92,9 +104,30 @@ namespace PrivateGPTDemo.Server.Controllers
             return Ok();
         }
 
-        private Task<string> GetCurrentTime(string city)
+        private async Task<string> GetCurrentTime(string city, CancellationToken ct = default)
         {
-            throw new NotImplementedException();
+            using var httpClient = new HttpClient();
+
+            try
+            {
+
+                string url = $"http://worldtimeapi.org/api/timezone/Europe/{city}";
+
+                var response = await httpClient.GetAsync(url, ct);
+
+                var responseBody = await response.Content.ReadAsStringAsync(ct);
+
+                var jsonResponse = JsonNode.Parse(responseBody);
+
+                return responseBody;
+
+            }
+            catch (HttpRequestException e)
+            {
+
+                Console.WriteLine($"Message = {e.Message}");
+                return null;
+            }
         }
     }
 }
