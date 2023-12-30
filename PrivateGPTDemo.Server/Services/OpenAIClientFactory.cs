@@ -1,4 +1,5 @@
-﻿using Azure.AI.OpenAI;
+﻿using Azure;
+using Azure.AI.OpenAI;
 using Azure.Identity;
 
 namespace PrivateGPTDemo.Server.Services
@@ -29,13 +30,18 @@ namespace PrivateGPTDemo.Server.Services
                 throw new ArgumentNullException(nameof(endpoint));
             }
 
+            var key = _configuration.GetValue<string>("OpenAI:Key");
 
-            var client = new OpenAIClient(
-              new Uri(endpoint),
-              new DefaultAzureCredential());
+            if (!string.IsNullOrEmpty(key))
+            {
+                return new OpenAIClient(
+                  new Uri(endpoint),
+                  new AzureKeyCredential(key));
+            }
 
-
-            return client;
+            return new OpenAIClient(
+                  new Uri(endpoint),
+                  new DefaultAzureCredential());
         }
     }
 }
