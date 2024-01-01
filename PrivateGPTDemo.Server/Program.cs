@@ -13,7 +13,7 @@ builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
 //Tools
-builder.Services.AddScoped<IChatMessageHandler, GetCurrentWeather>();
+builder.Services.AddScoped<IChatMessageHandler, GetCurrentWeatherTool>();
 
 var app = builder.Build();
 

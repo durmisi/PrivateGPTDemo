@@ -5,29 +5,21 @@ using System.Text.Json;
 
 namespace PrivateGPTDemo.Server.Tools
 {
-    public class GetCurrentWeather : IChatMessageHandler
+    public class GetCurrentWeatherTool : IChatMessageHandler
     {
         private readonly IOpenAIClientFactory _openAIClientFactory;
 
-        public GetCurrentWeather(IOpenAIClientFactory openAIClientFactory)
+        public GetCurrentWeatherTool(IOpenAIClientFactory openAIClientFactory)
         {
             _openAIClientFactory = openAIClientFactory;
         }
 
 
-        public async Task HandleMessage(string message, CancellationToken ct = default)
+        private ChatCompletionsFunctionToolDefinition getWeatherTool = new ChatCompletionsFunctionToolDefinition()
         {
-            
-            var client = _openAIClientFactory.GetClient();
-            var deploymentName = _openAIClientFactory.GetDeploymentName("gpt-35-turbo");
-
-
-            #region Snippet:ChatTools:DefineTool
-            var getWeatherTool = new ChatCompletionsFunctionToolDefinition()
-            {
-                Name = "get_current_weather",
-                Description = "Get the current weather in a given location",
-                Parameters = BinaryData.FromObjectAsJson(
+            Name = "get_current_weather",
+            Description = "Get the current weather in a given location",
+            Parameters = BinaryData.FromObjectAsJson(
                 new
                 {
                     Type = "object",
@@ -47,17 +39,24 @@ namespace PrivateGPTDemo.Server.Tools
                     Required = new[] { "location" },
                 },
                 new JsonSerializerOptions() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase }),
-            };
-            #endregion
+        };
 
 
+        public async Task HandleMessage(string message, CancellationToken ct = default)
+        {
 
-            #region Snippet:ChatTools:RequestWithFunctions
-
+            var client = _openAIClientFactory.GetClient();
+            var deploymentName = _openAIClientFactory.GetDeploymentName("gpt-35-turbo");
 
             var messages = new List<ChatRequestMessage> {
+                new ChatRequestSystemMessage(@"
+                    You are a weather information assistant. 
+                    It is crucial that you do not generate any responses that involve any programming language, code, or coding instructions. 
+                    Stick strictly to providing weather-related information.
+                "),
                 new ChatRequestUserMessage(message)
             };
+
 
             foreach (var item in messages)
             {
@@ -70,15 +69,13 @@ namespace PrivateGPTDemo.Server.Tools
 
             var chatCompletionsOptions = new ChatCompletionsOptions(deploymentName, messages)
             {
+                Temperature = 0,
                 Tools = { getWeatherTool },
                 ToolChoice = ChatCompletionsToolChoice.Auto,
                 AzureExtensionsOptions = null
             };
 
             Response<ChatCompletions> response = await client.GetChatCompletionsAsync(chatCompletionsOptions, ct);
-
-            #endregion
-
 
             #region Snippet:ChatTools:HandleToolCalls
             // Purely for convenience and clarity, this standalone local method handles tool call responses.
@@ -118,13 +115,20 @@ namespace PrivateGPTDemo.Server.Tools
 
                 // Now make a new request with all the messages thus far, including the original
 
-                Response<ChatCompletions> response2 = await client.GetChatCompletionsAsync(chatCompletionsOptions, ct);
+                Response<ChatCompletions> responseWithToolCall = await client.GetChatCompletionsAsync(chatCompletionsOptions, ct);
 
-                foreach (var choice in response2.Value.Choices)
+                foreach (var choice in responseWithToolCall.Value.Choices)
                 {
                     Console.WriteLine(choice.Message.Content);
                 }
 
+            }
+            else if (responseChoice.FinishReason == CompletionsFinishReason.Stopped)
+            {
+                foreach (var choice in response.Value.Choices)
+                {
+                    Console.WriteLine(choice.Message.Content);
+                }
             }
 
             #endregion
