@@ -3,17 +3,33 @@ using PrivateGPTDemo.Server.Tools;
 
 var builder = WebApplication.CreateBuilder(args);
 
+var configuration = builder.Configuration;
+
+
 // Add services to the container.
-
-builder.Services.AddOpenAI();
-
 builder.Services.AddControllers();
 // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
-//Tools
+
+
+//open ai
+builder.Services.AddOpenAI();
+
 builder.Services.AddScoped<IChatMessageHandler, GetCurrentWeatherTool>();
+
+var searchEndpoint = configuration.GetValue<string>("OpenAI:SearchService:Endpoint");
+
+if (!string.IsNullOrEmpty(searchEndpoint))
+{
+    builder.Services.AddScoped<IChatMessageHandler>(sp =>
+    {
+        var indexName = configuration.GetValue<string>("OpenAI:SearchService:IndexName")!;
+        var apiKey = configuration.GetValue<string>("OpenAI:SearchService:ApiKey")!;
+        return new ChatWithYourData(sp.GetRequiredService<IOpenAIClientFactory>(), searchEndpoint, indexName, apiKey);
+    });
+}
 
 var app = builder.Build();
 
