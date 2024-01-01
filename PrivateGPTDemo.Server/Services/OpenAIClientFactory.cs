@@ -8,7 +8,7 @@ namespace PrivateGPTDemo.Server.Services
     public interface IOpenAIClientFactory
     {
         public OpenAIClient GetClient();
-
+        string GetDeploymentName(string name);
     }
 
 
@@ -42,6 +42,16 @@ namespace PrivateGPTDemo.Server.Services
             return new OpenAIClient(
                   new Uri(endpoint),
                   new DefaultAzureCredential());
+        }
+
+        public string GetDeploymentName(string name)
+        {
+            if (string.IsNullOrEmpty(name))
+            {
+                throw new ArgumentException($"'{nameof(name)}' cannot be null or empty.", nameof(name));
+            }
+
+            return _configuration.GetValue<string>($"OpenAI:Deployments:{name}")!;
         }
     }
 }

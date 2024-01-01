@@ -2,7 +2,6 @@
 using Azure.AI.OpenAI;
 using PrivateGPTDemo.Server.Services;
 using System.Text.Json;
-using System.Text.Json.Nodes;
 
 namespace PrivateGPTDemo.Server.Tools
 {
@@ -18,10 +17,9 @@ namespace PrivateGPTDemo.Server.Tools
 
         public async Task HandleMessage(string message, CancellationToken ct = default)
         {
-            var deploymentName = "gpt-35-turbo-0613";
-
-
+            
             var client = _openAIClientFactory.GetClient();
+            var deploymentName = _openAIClientFactory.GetDeploymentName("gpt-35-turbo");
 
 
             #region Snippet:ChatTools:DefineTool
@@ -58,7 +56,7 @@ namespace PrivateGPTDemo.Server.Tools
 
 
             var messages = new List<ChatRequestMessage> {
-                new ChatRequestUserMessage("What's the weather like in Boston?")
+                new ChatRequestUserMessage(message)
             };
 
             foreach (var item in messages)
@@ -77,7 +75,7 @@ namespace PrivateGPTDemo.Server.Tools
                 AzureExtensionsOptions = null
             };
 
-            Response<ChatCompletions> response = client.GetChatCompletions(chatCompletionsOptions);
+            Response<ChatCompletions> response = await client.GetChatCompletionsAsync(chatCompletionsOptions, ct);
 
             #endregion
 
@@ -120,7 +118,7 @@ namespace PrivateGPTDemo.Server.Tools
 
                 // Now make a new request with all the messages thus far, including the original
 
-                Response<ChatCompletions> response2 = client.GetChatCompletions(chatCompletionsOptions);
+                Response<ChatCompletions> response2 = await client.GetChatCompletionsAsync(chatCompletionsOptions, ct);
 
                 foreach (var choice in response2.Value.Choices)
                 {
@@ -130,13 +128,6 @@ namespace PrivateGPTDemo.Server.Tools
             }
 
             #endregion
-
-            #region Snippet:ChatTools:UseToolChoice
-            chatCompletionsOptions.ToolChoice = ChatCompletionsToolChoice.Auto; // let the model decide
-            chatCompletionsOptions.ToolChoice = ChatCompletionsToolChoice.None; // don't call tools
-            chatCompletionsOptions.ToolChoice = getWeatherTool; // only use the specified tool
-            #endregion
-
         }
 
     }
